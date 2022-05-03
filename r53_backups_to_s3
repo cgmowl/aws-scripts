@@ -1,0 +1,39 @@
+'''
+Queries Route53 for all ZoneIDs in an account
+Dumps all resource records from each zone in a JSON file with the zone-id as the filename
+Copies the file up to S3 bucket in Ohio
+'''
+
+import boto3, json, datetime
+
+session = boto3.Session(region_name='us-east-2')
+s3 = session.client('s3')
+route53 = session.client('route53')
+
+'Function to export all resource records into JSON format, output to file'
+
+def zone_export(zoneid):
+    data = {}
+    data['ResourceRecords'] = []
+    for resourcerecords in route53.list_resource_record_sets(HostedZoneId=zoneid)['ResourceRecordSets']:
+        data['ResourceRecords'].append(resourcerecords)
+
+    with open(zoneid+'.json', 'w', encoding='utf-8') as outfile:
+        json.dump(data, outfile, ensure_ascii=False, indent=4)
+
+    s3.upload_file(
+        Filename=zoneid+'.json',
+        Bucket='<BUCKET_NAME>',
+        Key=datetime.date.today().strftime("%m-%d-%Y/")+ zoneid +'.json'
+    )
+
+'Get a list of all Route53 zone IDs in this account'
+
+all_zones = []
+for zones in route53.list_hosted_zones()['HostedZones']:
+    all_zones.append((zones['Id'].lstrip('/hostedzone/')))
+
+'Run the function against each zone'
+
+for zone in all_zones:
+    zone_export(zone)
