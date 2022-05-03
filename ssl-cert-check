@@ -1,0 +1,74 @@
+import socket
+import ssl, boto3
+import re,sys,os,datetime
+
+def ssl_expiry_date(domainname):
+    ssl_date_fmt = r'%b %d %H:%M:%S %Y %Z'
+    context = ssl.create_default_context()
+    conn = context.wrap_socket(
+        socket.socket(socket.AF_INET),
+        server_hostname=domainname,
+    )
+    # 3 second timeout because Lambda has runtime limitations
+    conn.settimeout(3.0)
+    conn.connect((domainname, 443))
+    ssl_info = conn.getpeercert()
+    return datetime.datetime.strptime(ssl_info['notAfter'], ssl_date_fmt).date()
+
+def ssl_valid_time_remaining(domainname):
+    """Number of days left."""
+    expires = ssl_expiry_date(domainname)
+    return expires - datetime.datetime.utcnow().date()
+
+def sns_Alert(dName, eDays, sslStatus):
+    sslStat = dName + ' SSL certificate will expire in ' + eDays +' days!! '
+    snsSub = dName + ' SSL Certificate Expiry ' + sslStatus + ' alert'
+    print (sslStat)
+    print (snsSub)
+    response = client.publish(
+    TargetArn="arn:aws:sns:us-east-2:012345678912:SSL-Expiry",
+    Message= sslStat,
+    Subject= snsSub
+    )
+    
+def cert_error(dName, e):
+    sslStat = dName + ' external certificate error.  Please investigate root cause.' + ' The exception thrown was: ' + str(e)
+    snsSub = dName + ' has an external certificate error'
+    print (sslStat)
+    print (snsSub)
+    print(e)
+    response = client.publish(
+    TargetArn="arn:aws:sns:us-east-2:0123456789112:SSL-Expiry",
+    Message = sslStat,
+    Subject= snsSub
+    )
+    
+#####Main Section
+client = boto3.client('sns')
+def lambda_handler(event, context):
+    f = ['list.domain.com', 'domain2.com']
+    for dName in f:
+        try:
+            print(dName)
+            expDate = ssl_valid_time_remaining(dName.strip())
+            (a, b) = str(expDate).split(',')
+            (c, d) = a.split(' ')
+        # Critical alerts 
+            if int(c) < 15:
+                sns_Alert(dName, str(c), 'Critical')
+        # Frist critical alert on 20th day      
+            elif int(c) == 20:
+                sns_Alert(dName, str(c), 'Critical')
+        #third warning alert on 30th day      
+            elif int(c) == 30:
+                sns_Alert(dName, str(c), 'Warning')
+        #second warning alert on 40th day
+            elif int(c) == 40:
+                sns_Alert(dName, str(c), 'Warning')
+        #First warning alert on 50th day      
+            elif int(c) == 50:
+                sns_Alert(dName, str(c), 'Warning')
+            else:
+                print('Everything Fine..')
+        except Exception as e:
+            cert_error(dName, e)
