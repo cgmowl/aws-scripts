@@ -117,11 +117,11 @@ def recreate_dynamo():
             #Tags=[
             #    {
             #        'Key': 'Application',
-            #        'Value': 'TestWebkeyServerCloud'
+            #        'Value': 'AppName'
             #    },
             #    {
             #        'Key': 'Owner',
-            #        'Value': 'testwebkeysupport.plm@siemens.com'
+            #        'Value': 'support@email.com'
             #    },
             #]
         )
